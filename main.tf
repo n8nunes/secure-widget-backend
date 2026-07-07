@@ -91,12 +91,21 @@ resource "aws_lambda_function" "widget_backend" {
 resource "aws_apigatewayv2_api" "http_api" {
   name          = "secure-widget-gateway"
   protocol_type = "HTTP"
+  
+  cors_configuration {
+    allow_origins = ["*"]
+    allow_methods = ["GET", "POST", "OPTIONS"]
+    allow_headers = ["content-type"]
+  }
 }
 
 resource "aws_apigatewayv2_integration" "lambda_int" {
   api_id           = aws_apigatewayv2_api.http_api.id
   integration_type = "AWS_PROXY"
   integration_uri  = aws_lambda_function.widget_backend.invoke_arn
+  
+  # Forces API Gateway to talk to Lambda using modern payload structures
+  payload_format_version = "2.0" 
 }
 
 resource "aws_apigatewayv2_route" "route" {
@@ -111,10 +120,13 @@ resource "aws_apigatewayv2_stage" "default" {
   auto_deploy = true
 }
 
+# Clear and explicit permission for API Gateway to trigger your Lambda
 resource "aws_lambda_permission" "api_gw" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.widget_backend.function_name
   principal     = "apigateway.amazonaws.com"
+  
+  # Scopes invocation right across any execution route coming from this API ID
   source_arn    = "${aws_apigatewayv2_api.http_api.execution_arn}/*/*"
 }
